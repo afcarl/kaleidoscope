@@ -1,3 +1,4 @@
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -32,7 +33,7 @@ static int gettok() {
 
   // identifier: [a-zA-Z][a-zA-Z0-9]*
   if (isalpha(LastChar)) {
-    IdentifierStr += LastChar;
+    IdentifierStr = LastChar;
     while (isalnum(LastChar = getchar()))
       IdentifierStr += LastChar;
 
@@ -81,8 +82,16 @@ static int gettok() {
 // ExprAST: Base class for all expression nodes.
 class ExprAST {
  public:
+  virtual std::ostream& print(std::ostream& stream) const = 0;
   virtual ~ExprAST() {}
+
+ private:
+  friend std::ostream& operator<<(std::ostream& stream, const ExprAST& node);
 };
+
+std::ostream& operator<<(std::ostream& stream, const ExprAST& node) {
+  return node.print(stream);
+}
 
 // NumberExprAST: Expression class for numeric literals.
 class NumberExprAST : public ExprAST {
@@ -90,8 +99,13 @@ class NumberExprAST : public ExprAST {
   NumberExprAST(double val) : Val(val) {}
 
  private:
+  virtual std::ostream& print(std::ostream& stream) const override;
   double Val;
 };
+
+std::ostream& NumberExprAST::print(std::ostream& stream) const {
+  return stream << "(NumberExprAST " << Val << ")";
+}
 
 // VariableExprAST: Expression class for referencing a variable.
 class VariableExprAST : public ExprAST {
@@ -99,8 +113,13 @@ class VariableExprAST : public ExprAST {
   VariableExprAST(const std::string& name) : Name(name) {}
 
  private:
+  virtual std::ostream& print(std::ostream& stream) const override;
   std::string Name;
 };
+
+std::ostream& VariableExprAST::print(std::ostream& stream) const {
+  return stream << "(VariableExprAST " << Name << ")";
+}
 
 // BinaryExprAST: Expression class for a binary operator.
 class BinaryExprAST : public ExprAST {
@@ -109,10 +128,15 @@ class BinaryExprAST : public ExprAST {
       : Op(op), LHS(lhs), RHS(rhs) {}
 
  private:
+  virtual std::ostream& print(std::ostream& stream) const override;
   char Op;
   ExprAST* LHS;
   ExprAST* RHS;
 };
+
+std::ostream& BinaryExprAST::print(std::ostream& stream) const {
+  return stream << "(BinaryExprAST " << Op << " " << *LHS << " " << *RHS;
+}
 
 // CallExprAST: Expression class for function calls.
 class CallExprAST : public ExprAST {
@@ -121,9 +145,18 @@ class CallExprAST : public ExprAST {
     : Callee(callee), Args(args) {}
 
  private:
+  virtual std::ostream& print(std::ostream& stream) const override;
   std::string Callee;
   std::vector<ExprAST*> Args;
 };
+
+std::ostream& CallExprAST::print(std::ostream& stream) const {
+  stream << "(CallExprAST \"" << Callee << "\"";
+  std::vector<ExprAST*>::const_iterator iter = Args.begin();
+  while (iter != Args.end())
+    stream << " " << **iter++;
+  return stream << ")";
+}
 
 // PrototypeAST: Represents a function signature (name and arity) as well
 // as its argument names.
@@ -133,9 +166,19 @@ class PrototypeAST {
       : Name(name), Args(args) {}
 
  private:
+  friend std::ostream& operator<<(std::ostream& stream,
+                                  const PrototypeAST& node);
   std::string Name;
   std::vector<std::string> Args;
 };
+
+std::ostream& operator<<(std::ostream& stream, const PrototypeAST& node) {
+  stream << "(PrototypeAST \"" << node.Name << "\"";
+  std::vector<std::string>::const_iterator iter = node.Args.begin();
+  while (iter != node.Args.end())
+    stream << " \"" << *iter++ << "\"";
+  return stream << ")";
+}
 
 // FunctionAST: Represents a function definition.
 class FunctionAST {
@@ -143,9 +186,15 @@ class FunctionAST {
   FunctionAST(PrototypeAST* proto, ExprAST* body) : Proto(proto), Body(body) {}
 
  private:
+  friend std::ostream& operator<<(std::ostream& stream,
+                                  const FunctionAST& node);
   PrototypeAST* Proto;
   ExprAST* Body;
 };
+
+std::ostream& operator<<(std::ostream& stream, const FunctionAST& node) {
+  return stream << "(FunctionAST " << *node.Proto << " " << *node.Body << ")";
+}
 
 // -----------------------------------------------------------------------------
 // Parser
@@ -355,8 +404,10 @@ static FunctionAST* ParseTopLevelExpr() {
 }
 
 static void HandleDefinition() {
-  if (ParseDefinition()) {
+  FunctionAST* defNode;
+  if ((defNode = ParseDefinition())) {
     fprintf(stderr, "Parsed a function definition.\n");
+    std::cout << *defNode << std::endl;
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -364,8 +415,10 @@ static void HandleDefinition() {
 }
 
 static void HandleExtern() {
-  if (ParseExtern()) {
+  PrototypeAST* externNode;
+  if ((externNode = ParseExtern())) {
     fprintf(stderr, "Parsed an extern.\n");
+    std::cout << *externNode << std::endl;
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -374,8 +427,10 @@ static void HandleExtern() {
 
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
-  if (ParseTopLevelExpr()) {
+  FunctionAST* exprNode;
+  if ((exprNode = ParseTopLevelExpr())) {
     fprintf(stderr, "Parsed a top-level expr.\n");
+    std::cout << *exprNode << std::endl;
   } else {
     // Skip token for error recovery.
     getNextToken();
