@@ -1,6 +1,10 @@
 #include <string>
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
+
+// -----------------------------------------------------------------------------
+// Lexer
 
 enum Token {
   tok_eof = -1,
@@ -17,7 +21,7 @@ enum Token {
 static std::string IdentifierStr;  // Filled in if tok_identifier
 static double NumVal;              // Filled in if tok_number
 
-// Returns the next token from standard input.
+// gettok: Returns the next token from standard input.
 static int gettok() {
   static int LastChar = ' ';
 
@@ -69,3 +73,75 @@ static int gettok() {
   LastChar = getchar();
   return ThisChar;
 }
+
+// -----------------------------------------------------------------------------
+// Parser
+
+// ExprAST: Base class for all expression nodes.
+class ExprAST {
+ public:
+  virtual ~ExprAST() {}
+};
+
+// NumberExprAST: Expression class for numeric literals.
+class NumberExprAST : public ExprAST {
+ public:
+  NumberExprAST(double val) : Val(val) {}
+
+ private:
+  double Val;
+};
+
+// VariableExprAST: Expression class for referencing a variable.
+class VariableExprAST : public ExprAST {
+ public:
+  VariableExprAST(const std::string& name) : Name(name) {}
+
+ private:
+  std::string Name;
+};
+
+// BinaryExprAST: Expression class for a binary operator.
+class BinaryExprAST : public ExprAST {
+ public:
+  BinaryExprAST(char op, ExprAST* lhs, ExprAST* rhs)
+      : Op(op), LHS(lhs), RHS(rhs) {}
+
+ private:
+  char Op;
+  ExprAST* LHS;
+  ExprAST* RHS;
+};
+
+// CallExprAST: Expression class for function calls.
+class CallExprAST : public ExprAST {
+ public:
+  CallExprAST(const std::string& callee, std::vector<ExprAST*>& args)
+    : Callee(callee), Args(args) {}
+
+ private:
+  std::string Callee;
+  std::vector<ExprAST*> Args;
+};
+
+// PrototypeAST: Represents a function signature (name and arity) as well
+// as its argument names.
+class PrototypeAST {
+ public:
+  PrototypeAST(const std::string& name, const std::vector<std::string>& args)
+      : Name(name), Args(args) {}
+
+ private:
+  std::string Name;
+  std::vector<std::string> Args;
+};
+
+// FunctionAST: Represents a function definition.
+class FunctionAST {
+ public:
+  FunctionAST(PrototypeAST* proto, ExprAST* body) : Proto(proto), Body(body) {}
+
+ private:
+  PrototypeAST* Proto;
+  ExprAST* Body;
+};
