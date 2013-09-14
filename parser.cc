@@ -5,201 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 
-// -----------------------------------------------------------------------------
-// Lexer
-
-enum Token {
-  tok_eof = -1,
-
-  // commands
-  tok_def = -2,
-  tok_extern = -3,
-
-  // primary
-  tok_identifier = -4,
-  tok_number = -5,
-};
-
-static std::string IdentifierStr;  // Filled in if tok_identifier
-static double NumVal;              // Filled in if tok_number
-
-// gettok: Returns the next token from standard input.
-static int gettok() {
-  static int LastChar = ' ';
-
-  // Skip whitespace.
-  while (isspace(LastChar))
-    LastChar = getchar();
-
-  // identifier: [a-zA-Z][a-zA-Z0-9]*
-  if (isalpha(LastChar)) {
-    IdentifierStr = LastChar;
-    while (isalnum(LastChar = getchar()))
-      IdentifierStr += LastChar;
-
-    if (IdentifierStr == "def")
-      return tok_def;
-    if (IdentifierStr == "extern")
-      return tok_extern;
-    return tok_identifier;
-  }
-
-  // number: [0-9.]+
-  if (isdigit(LastChar) || LastChar == '.') {
-    std::string NumStr;
-    do {
-      NumStr += LastChar;
-      LastChar = getchar();
-    } while (isdigit(LastChar) || LastChar == '.');
-
-    NumVal = strtod(NumStr.c_str(), 0);
-    return tok_number;
-  }
-
-  // Comment goes until the end of the line.
-  if (LastChar == '#') {
-    do {
-      LastChar = getchar();
-    } while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
-
-    if (LastChar != EOF)
-      return gettok();
-  }
-
-  // Don't eat the EOF.
-  if (LastChar == EOF)
-    return tok_eof;
-
-  // Nothing matches -- eat and return the character.
-  int ThisChar = LastChar;
-  LastChar = getchar();
-  return ThisChar;
-}
-
-// -----------------------------------------------------------------------------
-// AST nodes
-
-// ExprAST: Base class for all expression nodes.
-class ExprAST {
- public:
-  virtual std::ostream& print(std::ostream& stream) const = 0;
-  virtual ~ExprAST() {}
-
- private:
-  friend std::ostream& operator<<(std::ostream& stream, const ExprAST& node);
-};
-
-std::ostream& operator<<(std::ostream& stream, const ExprAST& node) {
-  return node.print(stream);
-}
-
-// NumberExprAST: Expression class for numeric literals.
-class NumberExprAST : public ExprAST {
- public:
-  NumberExprAST(double val) : Val(val) {}
-
- private:
-  virtual std::ostream& print(std::ostream& stream) const override;
-  double Val;
-};
-
-std::ostream& NumberExprAST::print(std::ostream& stream) const {
-  return stream << "(NumberExprAST " << Val << ")";
-}
-
-// VariableExprAST: Expression class for referencing a variable.
-class VariableExprAST : public ExprAST {
- public:
-  VariableExprAST(const std::string& name) : Name(name) {}
-
- private:
-  virtual std::ostream& print(std::ostream& stream) const override;
-  std::string Name;
-};
-
-std::ostream& VariableExprAST::print(std::ostream& stream) const {
-  return stream << "(VariableExprAST " << Name << ")";
-}
-
-// BinaryExprAST: Expression class for a binary operator.
-class BinaryExprAST : public ExprAST {
- public:
-  BinaryExprAST(char op, ExprAST* lhs, ExprAST* rhs)
-      : Op(op), LHS(lhs), RHS(rhs) {}
-
- private:
-  virtual std::ostream& print(std::ostream& stream) const override;
-  char Op;
-  ExprAST* LHS;
-  ExprAST* RHS;
-};
-
-std::ostream& BinaryExprAST::print(std::ostream& stream) const {
-  return stream << "(BinaryExprAST " << Op << " " << *LHS << " " << *RHS;
-}
-
-// CallExprAST: Expression class for function calls.
-class CallExprAST : public ExprAST {
- public:
-  CallExprAST(const std::string& callee, std::vector<ExprAST*>& args)
-    : Callee(callee), Args(args) {}
-
- private:
-  virtual std::ostream& print(std::ostream& stream) const override;
-  std::string Callee;
-  std::vector<ExprAST*> Args;
-};
-
-std::ostream& CallExprAST::print(std::ostream& stream) const {
-  stream << "(CallExprAST \"" << Callee << "\"";
-  std::vector<ExprAST*>::const_iterator iter = Args.begin();
-  while (iter != Args.end())
-    stream << " " << **iter++;
-  return stream << ")";
-}
-
-// PrototypeAST: Represents a function signature (name and arity) as well
-// as its argument names.
-class PrototypeAST {
- public:
-  PrototypeAST(const std::string& name, const std::vector<std::string>& args)
-      : Name(name), Args(args) {}
-
- private:
-  friend std::ostream& operator<<(std::ostream& stream,
-                                  const PrototypeAST& node);
-  std::string Name;
-  std::vector<std::string> Args;
-};
-
-std::ostream& operator<<(std::ostream& stream, const PrototypeAST& node) {
-  stream << "(PrototypeAST \"" << node.Name << "\"";
-  std::vector<std::string>::const_iterator iter = node.Args.begin();
-  while (iter != node.Args.end())
-    stream << " \"" << *iter++ << "\"";
-  return stream << ")";
-}
-
-// FunctionAST: Represents a function definition.
-class FunctionAST {
- public:
-  FunctionAST(PrototypeAST* proto, ExprAST* body) : Proto(proto), Body(body) {}
-
- private:
-  friend std::ostream& operator<<(std::ostream& stream,
-                                  const FunctionAST& node);
-  PrototypeAST* Proto;
-  ExprAST* Body;
-};
-
-std::ostream& operator<<(std::ostream& stream, const FunctionAST& node) {
-  return stream << "(FunctionAST " << *node.Proto << " " << *node.Body << ")";
-}
-
-// -----------------------------------------------------------------------------
-// Parser
-
-static ExprAST* ParseExpression();
+#include "ast.h"
+#include "lexer.h"
 
 // CurTok: Holds the current token.
 static int CurTok;
@@ -222,6 +29,8 @@ FunctionAST* ErrorFunction(const char* Str) {
   Error(Str);
   return NULL;
 }
+
+static ExprAST* ParseExpression();
 
 // numberexpr ::= number
 static ExprAST* ParseNumberExpr() {
@@ -403,6 +212,9 @@ static FunctionAST* ParseTopLevelExpr() {
   return NULL;
 }
 
+// -----------------------------------------------------------------------------
+// Drivers
+
 static void HandleDefinition() {
   FunctionAST* defNode;
   if ((defNode = ParseDefinition())) {
@@ -452,7 +264,7 @@ static void MainLoop() {
 }
 
 // -----------------------------------------------------------------------------
-// Driver
+// Main
 
 int main() {
   // Install standard binary operators.
