@@ -5,11 +5,11 @@
 // ExprAST: Base class for all expression nodes.
 class ExprAST {
  public:
-  virtual std::ostream& print(std::ostream& stream) const = 0;
   virtual ~ExprAST() {}
 
  private:
   friend std::ostream& operator<<(std::ostream& stream, const ExprAST& node);
+  virtual std::ostream& print(std::ostream& stream) const = 0;
 };
 
 // NumberExprAST: Expression class for numeric literals.
