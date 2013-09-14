@@ -2,10 +2,16 @@
 #include <vector>
 #include <ostream>
 
+namespace llvm {
+class Function;
+class Value;
+}  // namespace llvm
+
 // ExprAST: Base class for all expression nodes.
 class ExprAST {
  public:
   virtual ~ExprAST() {}
+  virtual llvm::Value* Codegen() = 0;
 
  private:
   friend std::ostream& operator<<(std::ostream& stream, const ExprAST& node);
@@ -16,6 +22,7 @@ class ExprAST {
 class NumberExprAST : public ExprAST {
  public:
   NumberExprAST(double val) : Val(val) {}
+  virtual llvm::Value* Codegen() override;
 
  private:
   virtual std::ostream& print(std::ostream& stream) const override;
@@ -26,6 +33,7 @@ class NumberExprAST : public ExprAST {
 class VariableExprAST : public ExprAST {
  public:
   VariableExprAST(const std::string& name) : Name(name) {}
+  virtual llvm::Value* Codegen() override;
 
  private:
   virtual std::ostream& print(std::ostream& stream) const override;
@@ -37,6 +45,7 @@ class BinaryExprAST : public ExprAST {
  public:
   BinaryExprAST(char op, ExprAST* lhs, ExprAST* rhs)
       : Op(op), LHS(lhs), RHS(rhs) {}
+  virtual llvm::Value* Codegen() override;
 
  private:
   virtual std::ostream& print(std::ostream& stream) const override;
@@ -50,6 +59,7 @@ class CallExprAST : public ExprAST {
  public:
   CallExprAST(const std::string& callee, std::vector<ExprAST*>& args)
     : Callee(callee), Args(args) {}
+  virtual llvm::Value* Codegen() override;
 
  private:
   virtual std::ostream& print(std::ostream& stream) const override;
@@ -63,6 +73,7 @@ class PrototypeAST {
  public:
   PrototypeAST(const std::string& name, const std::vector<std::string>& args)
       : Name(name), Args(args) {}
+  llvm::Function* Codegen();
 
  private:
   friend std::ostream& operator<<(std::ostream& stream,
@@ -75,6 +86,7 @@ class PrototypeAST {
 class FunctionAST {
  public:
   FunctionAST(PrototypeAST* proto, ExprAST* body) : Proto(proto), Body(body) {}
+  llvm::Function* Codegen();
 
  private:
   friend std::ostream& operator<<(std::ostream& stream,

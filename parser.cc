@@ -5,8 +5,16 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+
 #include "ast.h"
+#include "codegen.h"
 #include "lexer.h"
+
+using namespace llvm;
 
 // CurTok: Holds the current token.
 static int CurTok;
@@ -17,15 +25,15 @@ static int getNextToken() {
 }
 
 // Rudimentary error handling routines.
-ExprAST* Error(const char* Str) {
+static ExprAST* Error(const char* Str) {
   fprintf(stderr, "Error: %s\n", Str);
   return NULL;
 }
-PrototypeAST* ErrorPrototype(const char* Str) {
+static PrototypeAST* ErrorPrototype(const char* Str) {
   Error(Str);
   return NULL;
 }
-FunctionAST* ErrorFunction(const char* Str) {
+static FunctionAST* ErrorFunction(const char* Str) {
   Error(Str);
   return NULL;
 }
@@ -216,10 +224,11 @@ static FunctionAST* ParseTopLevelExpr() {
 // Drivers
 
 static void HandleDefinition() {
-  FunctionAST* defNode;
-  if ((defNode = ParseDefinition())) {
-    fprintf(stderr, "Parsed a function definition.\n");
-    std::cout << *defNode << std::endl;
+  if (FunctionAST* F = ParseDefinition()) {
+    if (Function* LF = F->Codegen()) {
+      fprintf(stderr, "Read function definition:");
+      LF->dump();
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -227,10 +236,11 @@ static void HandleDefinition() {
 }
 
 static void HandleExtern() {
-  PrototypeAST* externNode;
-  if ((externNode = ParseExtern())) {
-    fprintf(stderr, "Parsed an extern.\n");
-    std::cout << *externNode << std::endl;
+  if (PrototypeAST* P = ParseExtern()) {
+    if (Function* F = P->Codegen()) {
+      fprintf(stderr, "Read extern: ");
+      F->dump();
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -239,10 +249,11 @@ static void HandleExtern() {
 
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
-  FunctionAST* exprNode;
-  if ((exprNode = ParseTopLevelExpr())) {
-    fprintf(stderr, "Parsed a top-level expr.\n");
-    std::cout << *exprNode << std::endl;
+  if (FunctionAST* F = ParseTopLevelExpr()) {
+    if (Function* LF = F->Codegen()) {
+      fprintf(stderr, "Read top-level expression:");
+      LF->dump();
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -267,6 +278,8 @@ static void MainLoop() {
 // Main
 
 int main() {
+  LLVMContext& Context = getGlobalContext();
+
   // Install standard binary operators.
   BinopPrecedence['<'] = 10;
   BinopPrecedence['+'] = 20;
@@ -277,8 +290,14 @@ int main() {
   fprintf(stderr, "k> ");
   getNextToken();
 
+  // Make the code module.
+  TheModule = new Module("my cool jit", Context);
+
   // Run the interpreter loop.
   MainLoop();
+
+  // Print all generated code.
+  TheModule->dump();
   
   return EXIT_SUCCESS;
 }
