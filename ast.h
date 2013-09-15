@@ -67,6 +67,20 @@ class CallExprAST : public ExprAST {
   std::vector<ExprAST*> Args;
 };
 
+// IfExprAST: Expression class for if/then/else.
+class IfExprAST : public ExprAST {
+ public:
+  IfExprAST(ExprAST* condNode, ExprAST* thenNode, ExprAST* elseNode)
+      : Cond(condNode), Then(thenNode), Else(elseNode) {}
+  virtual llvm::Value* Codegen() override;
+
+ private:
+  virtual std::ostream& print(std::ostream& stream) const override;
+  ExprAST* Cond;
+  ExprAST* Then;
+  ExprAST* Else;
+};
+
 // PrototypeAST: Represents a function signature (name and arity) as well
 // as its argument names.
 class PrototypeAST {

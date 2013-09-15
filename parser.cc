@@ -103,9 +103,32 @@ static ExprAST* ParseIdentifierExpr() {
   return new CallExprAST(IdName, Args);
 }
 
+// ifexpr ::= 'if' expression 'then' expression 'else' expression
+static ExprAST* ParseIfExpr() {
+  // Eat the 'if'.
+  getNextToken();
+  ExprAST* Cond = ParseExpression();
+  if (!Cond) return NULL;
+
+  if (CurTok != tok_then)
+    return Error("expected then");
+  getNextToken(); // Eat the 'then'
+  ExprAST* Then = ParseExpression();
+  if (!Then) return NULL;
+
+  if (CurTok != tok_else)
+    return Error("Expected else");
+  getNextToken(); // Eat the 'else'
+  ExprAST* Else = ParseExpression();
+  if (!Else) return NULL;
+
+  return new IfExprAST(Cond, Then, Else);
+}
+
 // primary ::= identifierexpr | numberexpr | parenexpr
 static ExprAST* ParsePrimary() {
   switch (CurTok) {
+    case tok_if: return ParseIfExpr();
     case tok_identifier: return ParseIdentifierExpr();
     case tok_number: return ParseNumberExpr();
     case '(': return ParseParenExpr();

@@ -63,6 +63,54 @@ Value* BinaryExprAST::Codegen() {
   }
 }
 
+Value* IfExprAST::Codegen() {
+  Value* CondV = Cond->Codegen();
+  if (CondV == NULL) return NULL;
+
+  // Convert the condition to a bool by comparing to 0.0.
+  CondV = Builder.CreateFCmpONE(
+      CondV, ConstantFP::get(getGlobalContext(), APFloat(0.0)), "ifcond");
+
+  Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+  // Create blocks for the then and else cases.  Insert the 'then' block
+  // at the end of the function.
+  BasicBlock* ThenBB =
+      BasicBlock::Create(getGlobalContext(), "then", TheFunction);
+  BasicBlock* ElseBB = BasicBlock::Create(getGlobalContext(), "else");
+  BasicBlock* MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
+
+  Builder.CreateCondBr(CondV, ThenBB, ElseBB);
+
+  // Emit then value.
+  Builder.SetInsertPoint(ThenBB);
+  Value* ThenV = Then->Codegen();
+  if (ThenV == NULL) return NULL;
+  Builder.CreateBr(MergeBB);
+  // Update ThenBB as the block can be changed by the Then codegen.
+  ThenBB = Builder.GetInsertBlock();
+
+  // Emit else block.
+  // We only added ThenBB to the function before, so now add the ElseBB.
+  TheFunction->getBasicBlockList().push_back(ElseBB);
+  Builder.SetInsertPoint(ElseBB);
+  Value* ElseV = Else->Codegen();
+  if (ElseV == NULL) return NULL;
+  Builder.CreateBr(MergeBB);
+  // Update ElseBB as the block can be changed by the Else codegen.
+  ElseBB = Builder.GetInsertBlock();
+
+  // Emit merge block.
+  // Remember to add MergeBB to the function.
+  TheFunction->getBasicBlockList().push_back(MergeBB);
+  Builder.SetInsertPoint(MergeBB);
+  PHINode* PN =
+      Builder.CreatePHI(Type::getDoubleTy(getGlobalContext()), 2, "iftmp");
+  PN->addIncoming(ThenV, ThenBB);
+  PN->addIncoming(ElseV, ElseBB);
+  return PN;
+}
+
 Value* CallExprAST::Codegen() {
   // Functions live in the module table.
   Function* CalleeF = TheModule->getFunction(Callee);

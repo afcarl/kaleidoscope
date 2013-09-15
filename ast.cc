@@ -32,6 +32,10 @@ std::ostream& NumberExprAST::print(std::ostream& stream) const {
   return stream << "(NumberExprAST " << Val << ")";
 }
 
+std::ostream& IfExprAST::print(std::ostream& stream) const {
+  return stream << "(IfExprAST " << Cond << " " << Then << " " << Else << ")";
+}
+
 std::ostream& operator<<(std::ostream& stream, const ExprAST& node) {
   return node.print(stream);
 }
