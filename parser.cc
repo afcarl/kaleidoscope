@@ -230,6 +230,8 @@ static FunctionAST* ParseTopLevelExpr() {
 // -----------------------------------------------------------------------------
 // Drivers
 
+static ExecutionEngine *TheExecutionEngine;
+
 static void HandleDefinition() {
   if (FunctionAST* F = ParseDefinition()) {
     if (Function* LF = F->Codegen()) {
@@ -258,8 +260,12 @@ static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
   if (FunctionAST* F = ParseTopLevelExpr()) {
     if (Function* LF = F->Codegen()) {
-      fprintf(stderr, "Read top-level expression:");
       LF->dump();
+      // JIT the function and get a pointer to the generated code.
+      void* FPtr = TheExecutionEngine->getPointerToFunction(LF);
+      // Cast it to the right type so we can call it.
+      double (*FP)() = (double (*)())(intptr_t)FPtr;
+      fprintf(stderr, "Evaluated to %f\n", FP());
     }
   } else {
     // Skip token for error recovery.
@@ -284,7 +290,13 @@ static void MainLoop() {
 // -----------------------------------------------------------------------------
 // Main
 
-static ExecutionEngine *TheExecutionEngine;
+// Native function implementation example.
+/// putchard - putchar that takes a double and returns 0.
+extern "C"
+double putchard(double X) {
+  putchar((char)X);
+  return 0;
+}
 
 int main() {
   InitializeNativeTarget();
