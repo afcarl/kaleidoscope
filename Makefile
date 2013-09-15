@@ -1,5 +1,5 @@
 LLVM_INCL=`llvm-config --cppflags`
-LLVM_LINK=`llvm-config --ldflags --libs core`
+LLVM_LINK=`llvm-config --ldflags --libs core jit native`
 FLAGS=-Wno-c++11-extensions -g
 CXX=clang++
 

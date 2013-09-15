@@ -1,3 +1,5 @@
+#include "codegen.h"
+
 #include <cstdio>
 #include <map>
 
@@ -6,6 +8,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/PassManager.h"
 
 #include "ast.h"
 
@@ -29,6 +32,9 @@ static IRBuilder<> Builder(getGlobalContext());
 
 // Symbol table.
 static std::map<std::string, Value*> NamedValues;
+
+// Optimization pipeline.
+FunctionPassManager* TheFPM;
 
 Value* NumberExprAST::Codegen() {
   return ConstantFP::get(getGlobalContext(), APFloat(Val));
@@ -128,6 +134,7 @@ Function* FunctionAST::Codegen() {
   if (Value* RetVal = Body->Codegen()) {
     Builder.CreateRet(RetVal);
     verifyFunction(*TheFunction);
+    TheFPM->run(*TheFunction);
     return TheFunction;
   }
 

@@ -5,10 +5,17 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "llvm/Analysis/Passes.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/PassManager.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Transforms/Scalar.h"
 
 #include "ast.h"
 #include "codegen.h"
@@ -277,7 +284,10 @@ static void MainLoop() {
 // -----------------------------------------------------------------------------
 // Main
 
+static ExecutionEngine *TheExecutionEngine;
+
 int main() {
+  InitializeNativeTarget();
   LLVMContext& Context = getGlobalContext();
 
   // Install standard binary operators.
@@ -293,8 +303,35 @@ int main() {
   // Make the code module.
   TheModule = new Module("my cool jit", Context);
 
+  // Set up the JIT, which takes ownership of the module.
+  std::string ErrStr;
+  TheExecutionEngine = EngineBuilder(TheModule).setErrorStr(&ErrStr).create();
+  if (!TheExecutionEngine) {
+    fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // Set up the optimizer pipeline.
+  FunctionPassManager OurFPM(TheModule);
+  // Register data structure layout.
+  OurFPM.add(new DataLayout(*TheExecutionEngine->getDataLayout()));
+  // Alias analysis for GVN.
+  OurFPM.add(createBasicAliasAnalysisPass());
+  // Peephole optimizations, bit-twiddling.
+  OurFPM.add(createInstructionCombiningPass());
+  // Expression reassociation.
+  OurFPM.add(createReassociatePass());
+  // GVN and Common Subexpression Elimination.
+  OurFPM.add(createGVNPass());
+  // CFG optimizations: delete unreachable blocks, etc.
+  OurFPM.add(createCFGSimplificationPass());
+  OurFPM.doInitialization();
+  TheFPM = &OurFPM;
+
   // Run the interpreter loop.
   MainLoop();
+
+  TheFPM = NULL;
 
   // Print all generated code.
   TheModule->dump();
