@@ -21,7 +21,7 @@ std::ostream& CallExprAST::print(std::ostream& stream) const {
 }
 
 std::ostream& BinaryExprAST::print(std::ostream& stream) const {
-  return stream << "(BinaryExprAST " << Op << " " << *LHS << " " << *RHS;
+  return stream << "(BinaryExprAST " << Op << " " << *LHS << " " << *RHS << ")";
 }
 
 std::ostream& VariableExprAST::print(std::ostream& stream) const {
@@ -34,6 +34,13 @@ std::ostream& NumberExprAST::print(std::ostream& stream) const {
 
 std::ostream& IfExprAST::print(std::ostream& stream) const {
   return stream << "(IfExprAST " << Cond << " " << Then << " " << Else << ")";
+}
+
+std::ostream& ForExprAST::print(std::ostream& stream) const {
+  return stream << "(ForExprAST " << VarName
+                << " " << Start
+                << " " << End
+                << " " << Step << ")";
 }
 
 std::ostream& operator<<(std::ostream& stream, const ExprAST& node) {

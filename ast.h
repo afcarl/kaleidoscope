@@ -81,6 +81,25 @@ class IfExprAST : public ExprAST {
   ExprAST* Else;
 };
 
+// ForExprAST: Expression class for for loops.
+class ForExprAST : public ExprAST {
+  public:
+   ForExprAST(const std::string& varname,
+              ExprAST* start,
+              ExprAST* end,
+              ExprAST* step,
+              ExprAST* body)
+       : VarName(varname), Start(start), End(end), Step(step), Body(body) {}
+   virtual llvm::Value* Codegen();
+  private:
+   virtual std::ostream& print(std::ostream& stream) const override;
+   std::string VarName;
+   ExprAST* Start;
+   ExprAST* End;
+   ExprAST* Step;
+   ExprAST* Body;
+};
+
 // PrototypeAST: Represents a function signature (name and arity) as well
 // as its argument names.
 class PrototypeAST {

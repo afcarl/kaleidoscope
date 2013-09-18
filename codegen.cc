@@ -111,6 +111,79 @@ Value* IfExprAST::Codegen() {
   return PN;
 }
 
+Value* ForExprAST::Codegen() {
+  Value* StartVal = Start->Codegen();
+  if (StartVal == NULL) return NULL;
+
+  // Create the basic block for the loop header and insert it after the
+  // current block.
+  Function* TheFunction = Builder.GetInsertBlock()->getParent();
+  BasicBlock* PreHeaderBB = Builder.GetInsertBlock();
+  BasicBlock* LoopBB =
+      BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+
+  // Explicit fallthrough into LoopBB from PreHeaderBB.
+  Builder.CreateBr(LoopBB);
+
+  // Start insertion into LoopBB.
+  Builder.SetInsertPoint(LoopBB);
+
+  // Start the PHI node with an entry for Start.
+  PHINode* Variable = Builder.CreatePHI(
+      Type::getDoubleTy(getGlobalContext()), 2, VarName.c_str());
+  Variable->addIncoming(StartVal, PreHeaderBB);
+
+  // Remember the old value of ValName in case we shadow it.
+  Value* OldVal = NamedValues[VarName];
+  NamedValues[VarName] = Variable;
+
+  // Emit the body of the loop.  We ignore the value, but don't allow errors.
+  if (Body->Codegen() == NULL) return NULL;
+
+  // Emit the step value.
+  Value* StepVal;
+  if (Step) {
+    StepVal = Step->Codegen();
+    if (StepVal == NULL) return NULL;
+  } else {
+    // If not specified, use 1.0.
+    StepVal = ConstantFP::get(getGlobalContext(), APFloat(1.0));
+  }
+
+  Value* NextVar = Builder.CreateFAdd(Variable, StepVal, "nextvar");
+
+  // Compute the end condition.
+  Value* EndCond = End->Codegen();
+  if (EndCond == NULL) return EndCond;
+
+  // Convert to a bool by comparing with 0.0.
+  EndCond = Builder.CreateFCmpONE(
+      EndCond, ConstantFP::get(getGlobalContext(), APFloat(0.0)), "loopcond");
+  
+  // Create the "after loop" block and insert it.
+  BasicBlock* LoopEndBB = Builder.GetInsertBlock();
+  BasicBlock* AfterBB =
+      BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+  // Insert the conditional branch into the end of LoopEndBB.
+  Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+
+  // New code goes in AfterBB.
+  Builder.SetInsertPoint(AfterBB);
+
+  // Add an entry point to the PHI node for the loop back-edge.
+  Variable->addIncoming(NextVar, LoopEndBB);
+
+  // Restore the unshadowed variable.
+  if (OldVal)
+    NamedValues[VarName] = OldVal;
+  else
+    NamedValues.erase(VarName);
+
+  // for loop always returns 0.0.
+  return Constant::getNullValue(Type::getDoubleTy(getGlobalContext()));
+}
+
 Value* CallExprAST::Codegen() {
   // Functions live in the module table.
   Function* CalleeF = TheModule->getFunction(Callee);

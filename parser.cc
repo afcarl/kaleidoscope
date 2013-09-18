@@ -125,10 +125,55 @@ static ExprAST* ParseIfExpr() {
   return new IfExprAST(Cond, Then, Else);
 }
 
+// forexpr ::= 'for' identifier '=' expr ',' expr (',' expr)? 'in' expression
+static ExprAST* ParseForExpr() {
+  // Eat the 'for'.
+  getNextToken();
+
+  if (CurTok != tok_identifier)
+    return Error("Expected identifier after 'for'");
+
+  std::string IdName = IdentifierStr;
+  // Eat the identifier.
+  getNextToken();
+
+  if (CurTok != '=')
+    return Error("Expected '=' in for loop");
+  // Eat the '='.
+  getNextToken();
+
+  ExprAST* Start = ParseExpression();
+  if (Start == NULL) return NULL;
+  if (CurTok != ',')
+    return Error("Expected ',' after start value in for loop");
+  getNextToken();
+
+  ExprAST* End = ParseExpression();
+  if (End == NULL) return NULL;
+
+  // Get the optional increment.
+  ExprAST* Step = NULL;
+  if (CurTok == ',') {
+    getNextToken();
+    Step = ParseExpression();
+    if (Step == NULL) return NULL;
+  }
+
+  if (CurTok != tok_in)
+    return Error("Expected 'in' in for loop");
+  getNextToken();
+
+  ExprAST* Body = ParseExpression();
+  if (Body == NULL) return NULL;
+
+  return new ForExprAST(IdName, Start, End, Step, Body);
+}
+
 // primary ::= identifierexpr | numberexpr | parenexpr
 static ExprAST* ParsePrimary() {
   switch (CurTok) {
     case tok_if: return ParseIfExpr();
+    case tok_for: return ParseForExpr();
     case tok_identifier: return ParseIdentifierExpr();
     case tok_number: return ParseNumberExpr();
     case '(': return ParseParenExpr();
