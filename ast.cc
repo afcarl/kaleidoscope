@@ -1,5 +1,7 @@
 #include "ast.h"
 
+#include <cassert>
+
 std::ostream& operator<<(std::ostream& stream, const FunctionAST& node) {
   return stream << "(FunctionAST " << *node.Proto << " " << *node.Body << ")";
 }
@@ -9,7 +11,14 @@ std::ostream& operator<<(std::ostream& stream, const PrototypeAST& node) {
   std::vector<std::string>::const_iterator iter = node.Args.begin();
   while (iter != node.Args.end())
     stream << " \"" << *iter++ << "\"";
+  if (node.isBinaryOp())
+    stream << " " << node.getBinaryPrecedence();
   return stream << ")";
+}
+
+char PrototypeAST::getOperatorName() const {
+  assert(isUnaryOp() || isBinaryOp());
+  return Name[Name.size()-1];
 }
 
 std::ostream& CallExprAST::print(std::ostream& stream) const {

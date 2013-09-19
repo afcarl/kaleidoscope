@@ -181,10 +181,6 @@ static ExprAST* ParsePrimary() {
   }
 }
 
-// BinopPrecedence: Maintains the precedence for each binary operator.
-// 1 is the lowest precedence.
-static std::map<char, int> BinopPrecedence;
-
 // GetTokPrecedence: Returns the precedence of the pending binop token.
 static int GetTokPrecedence() {
   if (!isascii(CurTok))
@@ -245,11 +241,36 @@ static ExprAST* ParseExpression() {
 
 // prototype ::= identifier '(' identifier* ')'
 static PrototypeAST* ParsePrototype() {
-  if (CurTok != tok_identifier)
-    return ErrorPrototype("Expected function name in prototype");
+  std::string FnName;
+  unsigned Kind = 0;
+  unsigned BinaryPrecedence = 30;
 
-  std::string FnName = IdentifierStr;
-  getNextToken();
+  switch (CurTok) {
+  case tok_identifier:
+    FnName = IdentifierStr;
+    Kind = 0;
+    getNextToken();
+    break;
+  case tok_binary:
+    getNextToken();
+    if (!isascii(CurTok))
+      return ErrorPrototype("Expected binary operator");
+    FnName = "binary";
+    FnName += (char)CurTok;
+    Kind = 2;
+    getNextToken();
+
+    // Read the optional precedence.
+    if (CurTok == tok_number) {
+      if (NumVal < 1 || NumVal > 100)
+        return ErrorPrototype("Invalid precedence: must be 1..100");
+      BinaryPrecedence = (unsigned)NumVal;
+      getNextToken();
+    }
+    break;
+  default:
+    return ErrorPrototype("Expected function name in prototype");
+  }
 
   if (CurTok != '(')
     return ErrorPrototype("Expected '(' in prototype");
@@ -264,7 +285,10 @@ static PrototypeAST* ParsePrototype() {
   // Eat ')'.
   getNextToken();
 
-  return new PrototypeAST(FnName, ArgNames);
+  if (Kind != 0 && ArgNames.size() != Kind)
+    return ErrorPrototype("Invalid number of args for operator");
+
+  return new PrototypeAST(FnName, ArgNames, Kind != 0, BinaryPrecedence);
 }
 
 // definition ::= 'def' prototype expression
@@ -289,7 +313,8 @@ static PrototypeAST* ParseExtern() {
 static FunctionAST* ParseTopLevelExpr() {
   if (ExprAST* E = ParseExpression()) {
     // Make an anonymous prototype.
-    PrototypeAST* Proto = new PrototypeAST("", std::vector<std::string>());
+    PrototypeAST* Proto =
+        new PrototypeAST("", std::vector<std::string>(), false, 0);
     return new FunctionAST(Proto, E);
   }
   return NULL;

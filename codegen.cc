@@ -27,6 +27,8 @@ static Function* ErrorFunction(const char* Str) {
 // Top-level IR container.
 Module* TheModule;
 
+std::map<char, int> BinopPrecedence;
+
 // LLVM instruction generator.
 static IRBuilder<> Builder(getGlobalContext());
 
@@ -59,8 +61,16 @@ Value* BinaryExprAST::Codegen() {
       // We only support floating point, so convert bool 0/1 to float.
       return Builder.CreateUIToFP(
           L, Type::getDoubleTy(getGlobalContext()), "booltmp");
-    default: return ErrorValue("invalid binary operator");
+    default: break;
   }
+
+  // Generate a call to a user-defined operator.
+  Function* F = TheModule->getFunction(std::string("binary") + Op);
+  if (!F)
+    return ErrorValue("invalid binary operator");
+
+  Value* Ops[2] = { L, R };
+  return Builder.CreateCall(F, Ops, "binop");
 }
 
 Value* IfExprAST::Codegen() {
@@ -246,6 +256,10 @@ Function* FunctionAST::Codegen() {
   Function* TheFunction = Proto->Codegen();
   if (!TheFunction)
     return NULL;
+
+  // If a binop, install it.
+  if (Proto->isBinaryOp())
+    BinopPrecedence[Proto->getOperatorName()] = Proto->getBinaryPrecedence();
 
   // Create a basic block to start insertion.
   BasicBlock* BB = BasicBlock::Create(getGlobalContext(), "entry", TheFunction);

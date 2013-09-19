@@ -104,15 +104,27 @@ class ForExprAST : public ExprAST {
 // as its argument names.
 class PrototypeAST {
  public:
-  PrototypeAST(const std::string& name, const std::vector<std::string>& args)
-      : Name(name), Args(args) {}
+  PrototypeAST(const std::string& name,
+               const std::vector<std::string>& args,
+               bool isOperator,
+               unsigned precedence)
+      : Name(name),
+        Args(args),
+        IsOperator(isOperator),
+        Precedence(precedence) {}
   llvm::Function* Codegen();
+  bool isUnaryOp() const { return IsOperator && Args.size() == 1; }
+  bool isBinaryOp() const { return IsOperator && Args.size() == 2; }
+  unsigned getBinaryPrecedence() const { return Precedence; }
+  char getOperatorName() const;
 
  private:
   friend std::ostream& operator<<(std::ostream& stream,
                                   const PrototypeAST& node);
   std::string Name;
   std::vector<std::string> Args;
+  bool IsOperator;
+  unsigned Precedence;
 };
 
 // FunctionAST: Represents a function definition.
