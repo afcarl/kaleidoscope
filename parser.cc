@@ -181,6 +181,21 @@ static ExprAST* ParsePrimary() {
   }
 }
 
+// unary ::= primary | '!' unary
+static ExprAST* ParseUnary() {
+  // If the current token is not an operator, it must be a primary.
+  if (!isascii(CurTok) || CurTok == '(' || CurTok == ',')
+    return ParsePrimary();
+
+  // If this is a unary operator, read it.
+  int Opc = CurTok;
+  getNextToken();
+  if (ExprAST* Operand = ParseUnary())
+    return new UnaryExprAST(Opc, Operand);
+
+  return NULL;
+}
+
 // GetTokPrecedence: Returns the precedence of the pending binop token.
 static int GetTokPrecedence() {
   if (!isascii(CurTok))
@@ -211,7 +226,7 @@ static ExprAST* ParseBinOpRHS(int ExprPrec, ExprAST* LHS) {
     getNextToken();
 
     // Parse the next primary after the binop.
-    ExprAST* RHS = ParsePrimary();
+    ExprAST* RHS = ParseUnary();
     if (!RHS) return NULL;
 
     // Which way do we associate?
@@ -233,22 +248,33 @@ static ExprAST* ParseBinOpRHS(int ExprPrec, ExprAST* LHS) {
 
 // expression ::= primary binoprhs
 static ExprAST* ParseExpression() {
-  ExprAST* LHS = ParsePrimary();
+  ExprAST* LHS = ParseUnary();
   if (!LHS) return NULL;
 
   return ParseBinOpRHS(0, LHS);
 }
 
 // prototype ::= identifier '(' identifier* ')'
+//             | binary LETTER number? (identifier, identifier)
+//             | unary LETTER (identifier)
 static PrototypeAST* ParsePrototype() {
   std::string FnName;
-  unsigned Kind = 0;
+  unsigned Kind = 0;  // 0 = identifier, 1 = unary, 2 = binary
   unsigned BinaryPrecedence = 30;
 
   switch (CurTok) {
   case tok_identifier:
     FnName = IdentifierStr;
     Kind = 0;
+    getNextToken();
+    break;
+  case tok_unary:
+    getNextToken();
+    if (!isascii(CurTok))
+      return ErrorPrototype("Expected unary operator");
+    FnName = "unary";
+    FnName += (char)CurTok;
+    Kind = 1;
     getNextToken();
     break;
   case tok_binary:

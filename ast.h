@@ -54,6 +54,19 @@ class BinaryExprAST : public ExprAST {
   ExprAST* RHS;
 };
 
+// UnaryExprAST: Expression class for a unary operator.
+class UnaryExprAST : public ExprAST {
+ public:
+  UnaryExprAST(char opcode, ExprAST* operand)
+      : Opcode(opcode), Operand(operand) {}
+  virtual llvm::Value* Codegen() override;
+
+ private:
+  virtual std::ostream& print(std::ostream& stream) const override;
+  char Opcode;
+  ExprAST* Operand;
+};
+
 // CallExprAST: Expression class for function calls.
 class CallExprAST : public ExprAST {
  public:

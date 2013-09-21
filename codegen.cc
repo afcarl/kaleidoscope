@@ -73,6 +73,15 @@ Value* BinaryExprAST::Codegen() {
   return Builder.CreateCall(F, Ops, "binop");
 }
 
+Value* UnaryExprAST::Codegen() {
+  Value* OperandV = Operand->Codegen();
+  if (OperandV == NULL) return NULL;
+  Function* F = TheModule->getFunction(std::string("unary")+Opcode);
+  if (F == NULL)
+    return ErrorValue("Unknown unary operator");
+  return Builder.CreateCall(F, OperandV, "unop");
+}
+
 Value* IfExprAST::Codegen() {
   Value* CondV = Cond->Codegen();
   if (CondV == NULL) return NULL;

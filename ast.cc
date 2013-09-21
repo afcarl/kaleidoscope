@@ -33,6 +33,10 @@ std::ostream& BinaryExprAST::print(std::ostream& stream) const {
   return stream << "(BinaryExprAST " << Op << " " << *LHS << " " << *RHS << ")";
 }
 
+std::ostream& UnaryExprAST::print(std::ostream& stream) const {
+  return stream << "(UnaryExprAST " << Opcode << " " << *Operand << ")";
+}
+
 std::ostream& VariableExprAST::print(std::ostream& stream) const {
   return stream << "(VariableExprAST " << Name << ")";
 }
