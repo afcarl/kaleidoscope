@@ -266,6 +266,43 @@ Value* CallExprAST::Codegen() {
   return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
 }
 
+Value* VarExprAST::Codegen() {
+  std::vector<AllocaInst*> OldBindings;
+  Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+  // Register all variables and emit their initializer.
+  for (unsigned i = 0; i != VarNames.size(); ++i) {
+    const std::string& VarName = VarNames[i].first;
+    ExprAST* Init = VarNames[i].second;
+    // Emit the initializer before adding the var to scope.
+    Value* InitVal;
+    if (Init) {
+      InitVal = Init->Codegen();
+      if (InitVal == NULL) return NULL;
+    } else {
+      // Default value is 0.0.
+      InitVal = ConstantFP::get(getGlobalContext(), APFloat(0.0));
+    }
+
+    AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+    Builder.CreateStore(InitVal, Alloca);
+
+    // Remember the old variable binding.
+    OldBindings.push_back(NamedValues[VarName]);
+    NamedValues[VarName] = Alloca;
+  }
+
+  // Codegen the body as all vars are now in scope.
+  Value* BodyVal = Body->Codegen();
+  if (BodyVal == NULL) return NULL;
+
+  // Pop the scope before returning.
+  for (unsigned i = 0; i != VarNames.size(); ++i)
+    NamedValues[VarNames[i].first] = OldBindings[i];
+
+  return BodyVal;
+}
+
 Function* PrototypeAST::Codegen() {
   std::vector<Type*> Doubles(
       Args.size(), Type::getDoubleTy(getGlobalContext()));

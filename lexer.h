@@ -17,6 +17,9 @@ enum Token {
 
   // operators
   tok_binary = -11, tok_unary = -12,
+
+  // vars
+  tok_var = -13,
 };
 
 // The string corresponding to the last token if it was tok_identifier.

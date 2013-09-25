@@ -56,6 +56,17 @@ std::ostream& ForExprAST::print(std::ostream& stream) const {
                 << " " << Step << ")";
 }
 
+std::ostream& VarExprAST::print(std::ostream& stream) const {
+  stream << "(VarExprAST (";
+  for (std::vector<VarAssign>::const_iterator iter = VarNames.begin();
+       iter != VarNames.end();
+       ++iter) {
+    stream << "(" << iter->first << " " << *iter->second << ")";
+    if (iter+1 != VarNames.end()) stream << " ";
+  }
+  return stream << ") " << *Body << ")";
+}
+
 std::ostream& operator<<(std::ostream& stream, const ExprAST& node) {
   return node.print(stream);
 }

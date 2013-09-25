@@ -1,5 +1,7 @@
 #include "lexer.h"
 
+#include <cstdlib>
+
 std::string IdentifierStr;
 double NumVal;
 
@@ -25,6 +27,7 @@ int gettok() {
     if (IdentifierStr == "in") return tok_in;
     if (IdentifierStr == "binary") return tok_binary;
     if (IdentifierStr == "unary") return tok_unary;
+    if (IdentifierStr == "var") return tok_var;
 
     return tok_identifier;
   }

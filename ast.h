@@ -114,6 +114,21 @@ class ForExprAST : public ExprAST {
    ExprAST* Body;
 };
 
+// VarExprAST: Expression class for var/in.
+class VarExprAST : public ExprAST {
+ public:
+  typedef std::pair<std::string, ExprAST*> VarAssign;
+  VarExprAST(const std::vector<VarAssign>& varnames,
+             ExprAST* body)
+      : VarNames(varnames), Body(body) {}
+  virtual llvm::Value* Codegen();
+
+ private:
+  virtual std::ostream& print(std::ostream& stream) const override;
+  std::vector<VarAssign> VarNames;
+  ExprAST* Body;
+};
+
 // PrototypeAST: Represents a function signature (name and arity) as well
 // as its argument names.
 class PrototypeAST {

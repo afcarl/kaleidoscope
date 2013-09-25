@@ -1,6 +1,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
@@ -169,11 +170,56 @@ static ExprAST* ParseForExpr() {
   return new ForExprAST(IdName, Start, End, Step, Body);
 }
 
+// varexpr ::= 'var' identifier ('=' expression)?
+//                 (',' identifier ('=' expression)?)* 'in 'expression;
+static ExprAST* ParseVarExpr() {
+  // Get the 'var'.
+  getNextToken();
+
+  std::vector<VarExprAST::VarAssign> VarNames;
+
+  if (CurTok != tok_identifier)
+    return Error("expected identifier after var");
+
+  // Parse list of VarAssigns.
+  while (true) {
+    std::string Name = IdentifierStr;
+    getNextToken();  // Eat identifier.
+
+    // Read the optional identifier.
+    ExprAST* Init = NULL;
+    if (CurTok == '=') {
+      getNextToken();  // Eat the '='.
+      Init = ParseExpression();
+      if (Init == NULL) return NULL;
+    }
+
+    VarNames.push_back(VarExprAST::VarAssign(Name, Init));
+
+    // End of var list, exit loop.
+    if (CurTok != ',') break;
+
+    getNextToken();  // Eat the ','.
+    if (CurTok != tok_identifier)
+      return Error("expected identifier list after comma");
+  }
+
+  if (CurTok != tok_in)
+    return Error("expected 'in' keyword after 'var'");
+  getNextToken();  // Eat 'in'.
+
+  ExprAST* Body = ParseExpression();
+  if (Body == NULL) return 0;
+
+  return new VarExprAST(VarNames, Body);
+}
+
 // primary ::= identifierexpr | numberexpr | parenexpr
 static ExprAST* ParsePrimary() {
   switch (CurTok) {
     case tok_if: return ParseIfExpr();
     case tok_for: return ParseForExpr();
+    case tok_var: return ParseVarExpr();
     case tok_identifier: return ParseIdentifierExpr();
     case tok_number: return ParseNumberExpr();
     case '(': return ParseParenExpr();
