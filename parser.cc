@@ -416,12 +416,19 @@ double putchard(double X) {
   putchar((char)X);
   return 0;
 }
+/// printd - printf that takes a double prints it as "%f\n", returning 0.
+extern "C" 
+double printd(double X) {
+  printf("%f\n", X);
+  return 0;
+}
 
 int main() {
   InitializeNativeTarget();
   LLVMContext& Context = getGlobalContext();
 
   // Install standard binary operators.
+  BinopPrecedence['='] = 2;
   BinopPrecedence['<'] = 10;
   BinopPrecedence['+'] = 20;
   BinopPrecedence['-'] = 20;
@@ -448,6 +455,8 @@ int main() {
   OurFPM.add(new DataLayout(*TheExecutionEngine->getDataLayout()));
   // Alias analysis for GVN.
   OurFPM.add(createBasicAliasAnalysisPass());
+  // Promote allocas to registers.
+  OurFPM.add(createPromoteMemoryToRegisterPass());
   // Peephole optimizations, bit-twiddling.
   OurFPM.add(createInstructionCombiningPass());
   // Expression reassociation.

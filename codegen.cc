@@ -33,10 +33,21 @@ std::map<char, int> BinopPrecedence;
 static IRBuilder<> Builder(getGlobalContext());
 
 // Symbol table.
-static std::map<std::string, Value*> NamedValues;
+static std::map<std::string, AllocaInst*> NamedValues;
 
 // Optimization pipeline.
 FunctionPassManager* TheFPM;
+
+// -----------------------------------------------------------------------------
+// Code generation.
+
+static AllocaInst* CreateEntryBlockAlloca(Function* TheFunction,
+                                          const std::string& VarName) {
+  IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+                   TheFunction->getEntryBlock().begin());
+  return TmpB.CreateAlloca(
+      Type::getDoubleTy(getGlobalContext()), 0, VarName.c_str());
+}
 
 Value* NumberExprAST::Codegen() {
   return ConstantFP::get(getGlobalContext(), APFloat(Val));
@@ -44,10 +55,31 @@ Value* NumberExprAST::Codegen() {
 
 Value* VariableExprAST::Codegen() {
   Value* V = NamedValues[Name];
-  return V ? V : ErrorValue("Unknown variable name");
+  if (V == NULL) ErrorValue("Unknown variable name");
+  // Load the value.
+  return Builder.CreateLoad(V, Name.c_str());
 }
 
 Value* BinaryExprAST::Codegen() {
+  // Special case '=' because we don't want to emit the LHS as an expression.
+  if (Op == '=') {
+    // Assignment requires the LHS to be an identifier.
+    VariableExprAST* LHSE = dynamic_cast<VariableExprAST*>(LHS);
+    if (!LHSE)
+      return ErrorValue("destination of '=' must be a variable");
+
+    // Codegen the RHS.
+    Value* Val = RHS->Codegen();
+    if (Val == NULL) return NULL;
+
+    // Look up the name.
+    Value* Variable = NamedValues[LHSE->getName()];
+    if (Variable == NULL) return ErrorValue("Unknown variable name");
+
+    Builder.CreateStore(Val, Variable);
+    return Val;
+  }
+
   Value* L = LHS->Codegen();
   Value* R = RHS->Codegen();
   if (!L || !R) return NULL;
@@ -131,30 +163,32 @@ Value* IfExprAST::Codegen() {
 }
 
 Value* ForExprAST::Codegen() {
+  Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+  // Create an alloca for the variable in the entry block.
+  AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
+
+  // Emit the start code first, without 'variable' in scope.
   Value* StartVal = Start->Codegen();
   if (StartVal == NULL) return NULL;
 
+  // Store the value into the alloc.
+  Builder.CreateStore(StartVal, Alloca);
+
   // Create the basic block for the loop header and insert it after the
   // current block.
-  Function* TheFunction = Builder.GetInsertBlock()->getParent();
-  BasicBlock* PreHeaderBB = Builder.GetInsertBlock();
   BasicBlock* LoopBB =
       BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
 
-  // Explicit fallthrough into LoopBB from PreHeaderBB.
+  // Explicit fallthrough into LoopBB from the current block.
   Builder.CreateBr(LoopBB);
 
   // Start insertion into LoopBB.
   Builder.SetInsertPoint(LoopBB);
 
-  // Start the PHI node with an entry for Start.
-  PHINode* Variable = Builder.CreatePHI(
-      Type::getDoubleTy(getGlobalContext()), 2, VarName.c_str());
-  Variable->addIncoming(StartVal, PreHeaderBB);
-
   // Remember the old value of ValName in case we shadow it.
-  Value* OldVal = NamedValues[VarName];
-  NamedValues[VarName] = Variable;
+  AllocaInst* OldVal = NamedValues[VarName];
+  NamedValues[VarName] = Alloca;
 
   // Emit the body of the loop.  We ignore the value, but don't allow errors.
   if (Body->Codegen() == NULL) return NULL;
@@ -169,18 +203,21 @@ Value* ForExprAST::Codegen() {
     StepVal = ConstantFP::get(getGlobalContext(), APFloat(1.0));
   }
 
-  Value* NextVar = Builder.CreateFAdd(Variable, StepVal, "nextvar");
-
   // Compute the end condition.
   Value* EndCond = End->Codegen();
   if (EndCond == NULL) return EndCond;
+
+  // Reload, increment, and restore the alloca.  This handles the case where
+  // the body of the loop mutates the variable.
+  Value* CurVar = Builder.CreateLoad(Alloca, VarName.c_str());
+  Value* NextVar = Builder.CreateFAdd(CurVar, StepVal, "nextvar");
+  Builder.CreateStore(NextVar, Alloca);
 
   // Convert to a bool by comparing with 0.0.
   EndCond = Builder.CreateFCmpONE(
       EndCond, ConstantFP::get(getGlobalContext(), APFloat(0.0)), "loopcond");
   
   // Create the "after loop" block and insert it.
-  BasicBlock* LoopEndBB = Builder.GetInsertBlock();
   BasicBlock* AfterBB =
       BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
 
@@ -190,9 +227,6 @@ Value* ForExprAST::Codegen() {
   // New code goes in AfterBB.
   Builder.SetInsertPoint(AfterBB);
 
-  // Add an entry point to the PHI node for the loop back-edge.
-  Variable->addIncoming(NextVar, LoopEndBB);
-
   // Restore the unshadowed variable.
   if (OldVal)
     NamedValues[VarName] = OldVal;
@@ -201,6 +235,16 @@ Value* ForExprAST::Codegen() {
 
   // for loop always returns 0.0.
   return Constant::getNullValue(Type::getDoubleTy(getGlobalContext()));
+}
+
+void PrototypeAST::CreateArgumentAllocas(Function* F) {
+  Function::arg_iterator AI = F->arg_begin();
+  for (unsigned Idx = 0; Idx != Args.size(); ++Idx, ++AI) {
+    // Create an alloca for this variable.
+    AllocaInst* Alloca = CreateEntryBlockAlloca(F, Args[Idx]);
+    Builder.CreateStore(AI, Alloca);
+    NamedValues[Args[Idx]] = Alloca;
+  }
 }
 
 Value* CallExprAST::Codegen() {
@@ -253,7 +297,6 @@ Function* PrototypeAST::Codegen() {
        Idx != Args.size();
        ++AI, ++Idx) {
     AI->setName(Args[Idx]);
-    NamedValues[Args[Idx]] = AI;
   }
 
   return F;
@@ -274,6 +317,9 @@ Function* FunctionAST::Codegen() {
   BasicBlock* BB = BasicBlock::Create(getGlobalContext(), "entry", TheFunction);
   Builder.SetInsertPoint(BB);
 
+  // Add all arguments to the symbol table and create their allocas.
+  Proto->CreateArgumentAllocas(TheFunction);
+
   // No control flow yet; one basic block with the return value.
   if (Value* RetVal = Body->Codegen()) {
     Builder.CreateRet(RetVal);
@@ -285,5 +331,7 @@ Function* FunctionAST::Codegen() {
   // Error reading the body; remove function.
   // TODO: this can delete a forward declaration.
   TheFunction->eraseFromParent();
+  if (Proto->isBinaryOp())
+    BinopPrecedence.erase(Proto->getOperatorName());
   return NULL;
 }

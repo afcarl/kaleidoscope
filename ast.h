@@ -33,6 +33,7 @@ class NumberExprAST : public ExprAST {
 class VariableExprAST : public ExprAST {
  public:
   VariableExprAST(const std::string& name) : Name(name) {}
+  std::string getName() const { return Name; }
   virtual llvm::Value* Codegen() override;
 
  private:
@@ -130,6 +131,7 @@ class PrototypeAST {
   bool isBinaryOp() const { return IsOperator && Args.size() == 2; }
   unsigned getBinaryPrecedence() const { return Precedence; }
   char getOperatorName() const;
+  void CreateArgumentAllocas(llvm::Function* F);
 
  private:
   friend std::ostream& operator<<(std::ostream& stream,
